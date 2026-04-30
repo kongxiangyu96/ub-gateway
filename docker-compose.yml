@@ -1,0 +1,40 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: userbank-gateway:latest
+    container_name: ub-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      HOST: 0.0.0.0
+      LOG_LEVEL: info
+
+      # ----- RAG Core -----
+      RAG_CORE_BASE_URL: ${RAG_CORE_BASE_URL:-http://rag-core:9000}
+      RAG_CORE_TIMEOUT_MS: ${RAG_CORE_TIMEOUT_MS:-15000}
+      RAG_CORE_TOP_K: ${RAG_CORE_TOP_K:-5}
+
+      # ----- LLM Provider -----
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-30000}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.2}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1024}
+
+      # ----- 业务参数 -----
+      PROMPT_MAX_CONTEXT_CHARS: ${PROMPT_MAX_CONTEXT_CHARS:-6000}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
