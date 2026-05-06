@@ -20,4 +20,9 @@ export function createLlmProvider(config: AppConfig): LlmProvider {
   }
 }
 
-export type { LlmProvider, LlmMessage, LlmCompletionResult } from '@/providers/llm/types';
+export type {
+  LlmProvider,
+  LlmMessage,
+  LlmCompletionResult,
+  LlmStreamDelta,
+} from '@/providers/llm/types';

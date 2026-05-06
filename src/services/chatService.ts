@@ -1,7 +1,9 @@
 import type { AppConfig } from '@/config';
-import type { RagCoreClient } from '@/clients/ragCoreClient';
+import { RagCoreError } from '@/clients/ragCoreClient';
+import type { PreparedChat, RagCoreClient } from '@/clients/ragCoreClient';
 import type { LlmProvider } from '@/providers/llm';
 import type { ChatRequest, ChatResponse } from '@/schemas/chat';
+import type { Citation, Usage } from '@/schemas/common';
 
 import { buildPrompt, extractLatestUserQuery } from '@/services/promptService';
 
@@ -9,6 +11,13 @@ export interface ChatServiceDeps {
   config: AppConfig;
   ragCore: RagCoreClient;
   llm: LlmProvider;
+}
+
+export interface ChatStreamHandlers {
+  onToken: (token: string) => void | Promise<void>;
+  onCitations: (citations: Citation[]) => void | Promise<void>;
+  onUsage: (usage: Usage) => void | Promise<void>;
+  onDone: () => void | Promise<void>;
 }
 
 export class ChatService {
@@ -23,13 +32,54 @@ export class ChatService {
   }
 
   async handle(req: ChatRequest): Promise<ChatResponse> {
-    if (req.stream) {
-      // MVP 暂不支持流式，预留扩展点：未来可走 SSE / NDJSON
-      throw new Error('streaming is not supported in MVP');
+    const prepared = await this.prepareLlmInput(req);
+    const completion = await this.llm.complete({ messages: prepared.messages });
+
+    return {
+      answer: completion.content,
+      citations: prepared.citations,
+      usage: completion.usage,
+    };
+  }
+
+  async stream(
+    req: ChatRequest,
+    handlers: ChatStreamHandlers,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const prepared = await this.prepareLlmInput(req);
+    await handlers.onCitations(prepared.citations);
+
+    let usage: Usage = { prompt_tokens: 0, completion_tokens: 0 };
+
+    for await (const delta of this.llm.stream({ messages: prepared.messages, signal })) {
+      if (delta.content) {
+        await handlers.onToken(delta.content);
+      }
+      if (delta.usage) {
+        usage = delta.usage;
+      }
+    }
+
+    await handlers.onUsage(usage);
+    await handlers.onDone();
+  }
+
+  private async prepareLlmInput(req: ChatRequest): Promise<PreparedChat> {
+    try {
+      return await this.ragCore.prepareChat({
+        messages: req.messages,
+        collectionId: req.collection_id,
+        topK: this.config.ragCore.topK,
+        maxContextChars: this.config.prompt.maxContextChars,
+      });
+    } catch (err) {
+      if (!(err instanceof RagCoreError) || err.statusCode !== 404) {
+        throw err;
+      }
     }
 
     const query = extractLatestUserQuery(req.messages);
-
     const citations = await this.ragCore.retrieve({
       query,
       collectionId: req.collection_id,
@@ -42,12 +92,9 @@ export class ChatService {
       maxContextChars: this.config.prompt.maxContextChars,
     });
 
-    const completion = await this.llm.complete({ messages });
-
     return {
-      answer: completion.content,
+      messages,
       citations: usedCitations,
-      usage: completion.usage,
     };
   }
 }

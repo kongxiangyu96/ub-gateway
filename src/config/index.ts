@@ -9,6 +9,8 @@ const EnvSchema = z.object({
   RAG_CORE_BASE_URL: z.url(),
   RAG_CORE_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
   RAG_CORE_TOP_K: z.coerce.number().int().positive().default(5),
+  RAG_CORE_CHAT_PREPARE_PATH: z.string().min(1).default('/chat/prepare'),
+  RAG_CORE_INDEX_JOBS_PATH: z.string().min(1).default('/index-jobs'),
 
   LLM_PROVIDER: z.enum(['openai']).default('openai'),
   LLM_BASE_URL: z.url(),
@@ -19,6 +21,18 @@ const EnvSchema = z.object({
   LLM_MAX_TOKENS: z.coerce.number().int().positive().default(1024),
 
   PROMPT_MAX_CONTEXT_CHARS: z.coerce.number().int().positive().default(6000),
+
+  MINIO_ENDPOINT: z.string().min(1),
+  MINIO_PORT: z.coerce.number().int().positive().default(9000),
+  MINIO_ACCESS_KEY: z.string().min(1),
+  MINIO_SECRET_KEY: z.string().min(1),
+  MINIO_BUCKET: z.string().min(1).default('userbank-knowledge'),
+  MINIO_USE_SSL: z
+    .union([z.literal('true'), z.literal('false')])
+    .default('false')
+    .transform((v) => v === 'true'),
+  MINIO_REGION: z.string().min(1).optional(),
+  UPLOAD_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().default(50),
 
   AUTH_ENABLED: z
     .union([z.literal('true'), z.literal('false')])
@@ -37,6 +51,8 @@ export type AppConfig = {
     baseUrl: string;
     timeoutMs: number;
     topK: number;
+    chatPreparePath: string;
+    indexJobsPath: string;
   };
   llm: {
     provider: 'openai';
@@ -49,6 +65,18 @@ export type AppConfig = {
   };
   prompt: {
     maxContextChars: number;
+  };
+  minio: {
+    endPoint: string;
+    port: number;
+    accessKey: string;
+    secretKey: string;
+    bucket: string;
+    useSSL: boolean;
+    region?: string;
+  };
+  upload: {
+    maxFileSizeBytes: number;
   };
   features: {
     authEnabled: boolean;
@@ -80,6 +108,8 @@ export function loadConfig(): AppConfig {
       baseUrl: env.RAG_CORE_BASE_URL.replace(/\/+$/, ''),
       timeoutMs: env.RAG_CORE_TIMEOUT_MS,
       topK: env.RAG_CORE_TOP_K,
+      chatPreparePath: normalizePath(env.RAG_CORE_CHAT_PREPARE_PATH),
+      indexJobsPath: normalizePath(env.RAG_CORE_INDEX_JOBS_PATH),
     },
     llm: {
       provider: env.LLM_PROVIDER,
@@ -93,9 +123,25 @@ export function loadConfig(): AppConfig {
     prompt: {
       maxContextChars: env.PROMPT_MAX_CONTEXT_CHARS,
     },
+    minio: {
+      endPoint: env.MINIO_ENDPOINT,
+      port: env.MINIO_PORT,
+      accessKey: env.MINIO_ACCESS_KEY,
+      secretKey: env.MINIO_SECRET_KEY,
+      bucket: env.MINIO_BUCKET,
+      useSSL: env.MINIO_USE_SSL,
+      region: env.MINIO_REGION,
+    },
+    upload: {
+      maxFileSizeBytes: env.UPLOAD_MAX_FILE_SIZE_MB * 1024 * 1024,
+    },
     features: {
       authEnabled: env.AUTH_ENABLED,
     },
   };
   return cached;
+}
+
+function normalizePath(path: string): string {
+  return `/${path.replace(/^\/+/, '').replace(/\/+$/, '')}`;
 }

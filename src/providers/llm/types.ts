@@ -9,6 +9,7 @@ export interface LlmCompletionParams {
   messages: LlmMessage[];
   temperature?: number;
   maxTokens?: number;
+  signal?: AbortSignal;
 }
 
 export interface LlmCompletionResult {
@@ -16,13 +17,20 @@ export interface LlmCompletionResult {
   usage: Usage;
 }
 
+export interface LlmStreamDelta {
+  content?: string;
+  usage?: Usage;
+  finishReason?: string | null;
+}
+
 /**
  * LLM Provider 抽象。
- * MVP 仅实现 OpenAI 兼容协议；后续可扩展 anthropic / local / 流式等。
+ * 目前实现 OpenAI 兼容协议；后续可扩展 anthropic / local 等。
  */
 export interface LlmProvider {
   readonly name: string;
   complete(params: LlmCompletionParams): Promise<LlmCompletionResult>;
+  stream(params: LlmCompletionParams): AsyncIterable<LlmStreamDelta>;
 }
 
 export class LlmProviderError extends Error {

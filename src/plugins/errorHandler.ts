@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 
 import { RagCoreError } from '@/clients/ragCoreClient';
+import { StorageError } from '@/clients/minioClient';
 import { LlmProviderError } from '@/providers/llm/types';
 
 export function registerErrorHandler(app: FastifyInstance): void {
@@ -34,6 +35,16 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return reply.status(502).send({
         error: {
           code: 'LLM_UPSTREAM_ERROR',
+          message: error.message,
+        },
+      });
+    }
+
+    if (error instanceof StorageError) {
+      log.error({ err: error, payload: error.payload }, 'object storage error');
+      return reply.status(502).send({
+        error: {
+          code: 'OBJECT_STORAGE_ERROR',
           message: error.message,
         },
       });
